@@ -1,78 +1,22 @@
-# leoDDcalculator
-#
-# This is the function named dd_calculate()
-# which calculate the values of mdd and ndd of the English texts in a folder
-#
-
-
-#########
-# IMPORTANT
-
-#before use the package and the function
-
-#read the following
-
-#1. install the following packages
-
-#2. download the language model
-
-#3. concerning your to-be-processed text files
-
-# 1. install the following packages
-#install Rtools for your Windows OS: https://cran.r-project.org/bin/windows/Rtools/
-
-#install the package "udpipe"
-
-#install.packages("udpipe")
-
-#install.packages('dplyr')
-
-#install.packages('readr')
-
-#install.packages('devtools')
-
-#install.packages('data.table') #needed for 'udpipe'
-
-#install.packages('chron') #needed for 'udpipe'
-
-#install_github("bnosac/udpipe", build_vignettes = TRUE)
-
-# 2. download the language model
-#download the English language model
-
-#english-ewt-ud-2.4-190531.udpipe
-
-#from https://github.com/jwijffels/udpipe.models.ud.2.4/blob/master/inst/udpipe-ud-2.4-190531/english-ewt-ud-2.4-190531.udpipe
-
-#and move it to the C disk root foloder "C:/" (the default language model foder)
-
-#'C:/english-ewt-ud-2.4-190531.udpipe'
-
-# 3. concerning your to-be-processed text files
-#your to-be-processed text files should be text files
-
-#put your to-be-processed text files in the folder 'C:/mytexts/' (the default texts_folder)
-
 rm(list = ls())
-
 library(udpipe)
 library(dplyr)
 library(readr)
 
-mdd_ndd_calculate <- function(language_model_folder = 'C:/',
-                              texts_folder = 'C:/mytexts/'){
+get_file_prefix <- function(file="") {
+    basename <- gsub('^.*/', '', file)
+    file_prefix <- gsub('\\.txt', '', basename)
+    return(file_prefix)
+}
 
 
-  df_mdd_ndd_all_files <- data.frame()
+parse_file <- function(file="", udmodel_eng="", texts_folder="") {
+    # for the postag_lemma csv
+    file_prefix <- get_file_prefix(file)
+    ofilename <- paste0(file_prefix, '_raw_dependencies.csv')
+    results_folder <- paste0(gsub('/$', '', texts_folder), '_results_dd/')
 
-  # load the language model
-  udmodel_eng <- udpipe_load_model(file = paste0(language_model_folder, 'english-ewt-ud-2.4-190531.udpipe'))
-
-  files <- list.files(texts_folder, full.names = T)
-
-  # read in files in the folder
-  for (file in files){
-
+    if (!file.exists(file.path(results_folder, ofilename))) {
     myfile <- read_file(file)
 
     # postag and lemmatize the text
@@ -114,22 +58,33 @@ mdd_ndd_calculate <- function(language_model_folder = 'C:/',
 
     ########## write out files
 
-    results_folder <- paste0(gsub('/$', '', texts_folder), '_results_dd/')
-    dir.create(results_folder)
+
+    if (!dir.exists(results_folder)) { dir.create(results_folder) }
     options(warn=-1)
-
-
-    # prepare the output file names
-    output_filename1 <- gsub('^.*/', '', file)
-    output_filename2 <- gsub('\\.txt', '', output_filename1)
-
-    # for the postag_lemma csv
-    output_filename3 <- paste0(output_filename2, '_raw_dependencies.csv')
 
     #####
     # write out the postag lemma csv
-    write_csv(pos_df_mini, paste0(results_folder, output_filename3))
+    write_csv(pos_df_mini, paste0(results_folder, ofilename))
+}
+    else {
+        pos_df_mini = read.csv(file.path(results_folder, ofilename))
+    }
+    return(pos_df_mini)
+}
 
+mdd_ndd_calculate <- function(language_model_folder = 'C:/',
+                              texts_folder = 'C:/mytexts/'){
+
+  df_mdd_ndd_all_files <- data.frame()
+
+  # load the language model
+  udmodel_eng <- udpipe_load_model(file = paste0(language_model_folder, 'english-ewt-ud-2.4-190531.udpipe'))
+  
+  files <- list.files(texts_folder, pattern=".*\\.txt", full.names = T)
+  
+  # read in files in the folder
+  for (file in files){
+    pos_df_mini = parse_file(file, udmodel_eng, texts_folder)
 
     ####### calculating mdd and ndd
 
@@ -183,7 +138,8 @@ mdd_ndd_calculate <- function(language_model_folder = 'C:/',
     mdd_file <- as.character(round(mean(mdd_v), 4))
     ndd_file <- as.character(round(mean(ndd_v), 4))
 
-    outdf_mdd_ndd <- data.frame(file_id = output_filename2,
+    file_prefix <- get_file_prefix(file)
+    outdf_mdd_ndd <- data.frame(file_id = file_prefix,
                                 mdd = mdd_file,
                                 ndd = ndd_file)
 
@@ -192,6 +148,6 @@ mdd_ndd_calculate <- function(language_model_folder = 'C:/',
 
   }
 
+  results_folder <- paste0(gsub('/$', '', texts_folder), '_results_dd/')
   write_csv(df_mdd_ndd_all_files, paste0(results_folder, '0mdd_ndd_results.csv'))
-
 }
